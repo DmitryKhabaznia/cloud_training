@@ -20,3 +20,7 @@ dependencies {
 	compile group: 'org.springdoc', name: 'springdoc-openapi-ui', version: '1.5.4'
 }
 
+test {
+	useJUnitPlatform()
+}
+
