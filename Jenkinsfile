@@ -6,6 +6,8 @@ pipeline {
         ENV_PORT = 80
         APP_PORT = 8080
         INSTANCE_NAME = 'main_app'
+        AWS_DEFAULT_REGION='eu-west-1'
+        AWS_ACCESS_KEYS = credentials('aws_cred')
     }
     stages {
         stage('Build and create jar') {
@@ -45,10 +47,20 @@ pipeline {
         }
         stage("Deploy from latest docker image") {
             steps {
-                def main_app = sh(script: "aws ec2 describe-instances --filter \"Name=tag:Name,Values=$INSTANCE_NAME\" --query \"Reservations[*].Instances[*].[PublicIpAddress, Tags[?Key==\'Name\'].Value|[0]]\" --output text | awk '{print \$1}'", returnStdout: true)
-                echo '$main_app'
-                sh 'docker rm -f $DOCKER_CONTAINER'
-                sh 'docker run --name $DOCKER_CONTAINER -dp $ENV_PORT:$APP_PORT $DOCKER_IMAGE'
+                script {
+                    def main_app = sh (returnStdout: true, script: """
+                             aws ec2 describe-instances \
+                                 --filter \"Name=tag:Name,Values=main_app\" \
+                                 --query \"Reservations[*].Instances[*].[PublicIpAddress]\" \
+                                 --output text | cat
+                         """).trim()
+                    echo "$main_app"
+                    sh "ssh ubuntu@$main_app docker rm -f $DOCKER_CONTAINER || true"
+                    sh "ssh ubuntu@$main_app docker run --name $DOCKER_CONTAINER -dp $ENV_PORT:$APP_PORT $DOCKER_IMAGE"
+
+                    sh 'docker rm -f $DOCKER_CONTAINER || true'
+                    sh 'docker run --name $DOCKER_CONTAINER -dp $ENV_PORT:$APP_PORT $DOCKER_IMAGE'
+                }
             }
         }
     }
